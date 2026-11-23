@@ -4,6 +4,6 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/mathCrossword/',
+  base: '/mathCrossWord/',
   test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 });
