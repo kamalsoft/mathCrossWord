@@ -35,22 +35,15 @@ export default function App() {
   const [modal, setModal] = useState<ModalName | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [victoryDismissedFor, setVictoryDismissedFor] = useState<string | null>(null);
-  // Check does not change state: its feedback (wrong cells) shows until the next entry.
-  const [checkShown, setCheckShown] = useState(false);
   const prevGame = useRef(game);
 
   const hasProfile = !!profile;
   const needsTour = !!profile && !profile.hasCompletedTour;
   const keysBlocked = !hasProfile || modal !== null || tourOpen;
-  const entries = game?.entries;
 
   useEffect(() => {
     if (needsTour) setTourOpen(true);
   }, [needsTour]);
-
-  useEffect(() => {
-    setCheckShown(false);
-  }, [entries]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -85,6 +78,8 @@ export default function App() {
       const g = getGame();
       if (!g || g.paused || g.status !== 'playing') return;
       if ((e.target as Element).closest?.('input, textarea, select')) return;
+      // Tab is left to the browser (cells are focusable buttons in reading order), so focus can leave the board.
+      const onCell = !!(e.target as Element).closest?.('[data-cell]');
 
       if (e.ctrlKey || e.metaKey || e.altKey) {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -101,9 +96,12 @@ export default function App() {
       if (/^[0-9]$/.test(e.key)) st.inputDigit(Number(e.key));
       else if (e.key === 'Backspace') st.backspace();
       else if (e.key === 'Delete') st.erase();
-      else if (e.key === 'Tab') selectPos(tabTo(puzzle, selected, e.shiftKey));
       else if (arrow) selectPos(selected ? stepTo(puzzle, selected, arrow[0], arrow[1]) : tabTo(puzzle, null, false));
-      else if (e.key === 'Enter') goNext();
+      else if (e.key === 'Enter') {
+        // Only on a grid cell: elsewhere Enter activates the focused button (Hint, Check, Settings).
+        if (!onCell) return;
+        goNext();
+      }
       else if (e.key === 'Escape') st.clearSelection();
       else if (e.key === 'n' || e.key === 'N') st.toggleNotes();
       else if (op && selected && puzzle.grid[selected.row][selected.col].type === 'operator') st.inputOperator(op);
@@ -114,8 +112,25 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [keysBlocked]);
 
-  if (!profile || !game) {
-    return <main className="min-h-dvh">{!profile && <OnboardingModal />}</main>;
+  if (!profile) {
+    return <main className="min-h-dvh"><OnboardingModal /></main>;
+  }
+  // A profile with no game means puzzle generation failed; offer a retry instead of a blank screen.
+  if (!game) {
+    return (
+      <main className="grid min-h-dvh place-items-center p-4">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="font-semibold">We could not make a puzzle this time.</p>
+          <button
+            type="button"
+            onClick={() => useAppStore.getState().newGame()}
+            className="min-h-11 rounded-xl bg-accent px-5 font-bold text-accent-fg shadow-sm active:scale-95"
+          >
+            Try a new puzzle
+          </button>
+        </div>
+      </main>
+    );
   }
 
   const showBank = showNumberBank(settings, game.puzzle.tier);
@@ -125,20 +140,29 @@ export default function App() {
   const showVictory = game.status === 'won' && victoryDismissedFor !== game.puzzle.id;
 
   return (
-    <main className="min-h-dvh bg-bg text-fg">
-      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-3 px-4 py-3">
+    <main className="flex min-h-dvh flex-col bg-bg text-fg">
+      <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3 lg:max-w-[1120px]">
         <Header onOpen={(m) => (m === 'tour' ? setTourOpen(true) : setModal(m))} />
         <SubHeader />
-        <CrossWordGrid
-          game={game}
-          autoCheck={settings.autoCheck}
-          showWrong={settings.autoCheck || checkShown}
-          highlightEquations={settings.highlightEquations}
-        />
-        <ControlBar onCheck={() => setCheckShown(true)} />
-        {showBank && <NumberBank game={game} />}
-        <NumberPad showOperators={showOperators} />
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
+          <div className="min-w-0">
+            <CrossWordGrid
+              game={game}
+              autoCheck={settings.autoCheck}
+              showWrong={settings.autoCheck || game.checked}
+              highlightEquations={settings.highlightEquations}
+            />
+          </div>
+          <div className="flex flex-col gap-3">
+            <ControlBar />
+            {showBank && <NumberBank game={game} />}
+            <NumberPad showOperators={showOperators} />
+          </div>
+        </div>
       </div>
+      <footer className="border-t border-line px-4 py-3 text-center text-xs text-muted">
+        Math CrossWord is a practice game for fun and learning. Puzzles are made on this device, and progress is kept only in this browser; nothing is sent to a server. Children should play with an adult nearby. Results are not an assessment of ability.
+      </footer>
 
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'help' && (

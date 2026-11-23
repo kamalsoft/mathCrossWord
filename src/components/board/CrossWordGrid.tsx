@@ -55,7 +55,8 @@ function CrossWordGridInner({ game, showWrong, highlightEquations }: Props) {
 
   // Praise the newest equation completed in this puzzle (not the ones already filled on load).
   const [praise, setPraise] = useState<string | null>(null);
-  const seen = useRef({ puzzleId: '', ids: new Set<string>() });
+  // Starts from the equations already solved, so loading or reloading a board praises nothing.
+  const seen = useRef({ puzzleId: puzzle.id, ids: new Set(solved.map((eq) => eq.id)) });
   useEffect(() => {
     const prev = seen.current;
     const fresh = solved.filter((eq) => !(prev.puzzleId === puzzle.id && prev.ids.has(eq.id)));
@@ -74,10 +75,13 @@ function CrossWordGridInner({ game, showWrong, highlightEquations }: Props) {
 
   return (
     <div data-tour="grid" className="relative mx-auto w-full [container-type:inline-size]">
+      {/* On narrow screens the board scrolls sideways instead of shrinking cells below the 44px touch target. */}
+      <div className="overflow-x-auto overflow-y-hidden py-2">
       <div
-        className="grid aspect-square w-full gap-[3px] rounded-2xl bg-line p-[3px] shadow-md"
+        className="mx-auto grid aspect-square w-full gap-[3px] rounded-2xl bg-line p-[3px] shadow-md"
         style={{
-          gridTemplateColumns: `repeat(${puzzle.size}, minmax(0, 1fr))`,
+          minWidth: `${puzzle.size * 44 + (puzzle.size + 1) * 3}px`,
+          gridTemplateColumns: `repeat(${puzzle.size}, minmax(44px, 1fr))`,
           gridTemplateRows: `repeat(${puzzle.size}, minmax(0, 1fr))`,
         }}
       >
@@ -103,6 +107,7 @@ function CrossWordGridInner({ game, showWrong, highlightEquations }: Props) {
             );
           }),
         )}
+      </div>
       </div>
 
       <div aria-live="polite" className="mt-2 min-h-11">

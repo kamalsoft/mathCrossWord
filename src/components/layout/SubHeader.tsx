@@ -15,14 +15,16 @@ export function SubHeader() {
 
   const stars = solvedEquations(game.puzzle, game.entries).length;
   const hasProgress = game.entries.some((row) => row.some((v) => v != null));
+  const confirmReplace = () => !hasProgress || window.confirm(CONFIRM_RESET);
   const startNew = (tier?: TierId) => {
-    if (hasProgress && !window.confirm(CONFIRM_RESET)) return;
-    useAppStore.getState().newGame(tier);
+    if (confirmReplace()) useAppStore.getState().newGame(tier);
   };
+  // The setting changes only after the player confirms, so Cancel keeps it as it was.
   const onDifficulty = (value: string) => {
+    if (!confirmReplace()) return;
     const tier = value === 'auto' ? undefined : (value as TierId);
     useAppStore.getState().setSettings({ difficultyOverride: value as 'auto' | TierId });
-    startNew(tier);
+    useAppStore.getState().newGame(tier);
   };
 
   return (
@@ -62,6 +64,11 @@ export function SubHeader() {
           </span>
         </p>
       </div>
+      {game.warning && game.status === 'playing' && (
+        <p role="status" className="text-sm font-semibold text-fg">
+          Mistake limit reached. You can keep playing, so check your entries carefully.
+        </p>
+      )}
       {game.status === 'lost' && (
         <p role="status" className="text-sm font-semibold text-wrong">
           Game over: too many mistakes. Start a new puzzle to keep playing.

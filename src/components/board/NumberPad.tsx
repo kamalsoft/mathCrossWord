@@ -11,7 +11,7 @@ const OPS: { op: Operator; name: string }[] = [
   { op: '÷', name: 'Divide' },
 ];
 
-const KEY = 'min-h-12 rounded-xl bg-surface text-xl font-bold shadow-sm transition hover:bg-surface-2 active:scale-95';
+const KEY = 'min-h-11 rounded-xl bg-surface text-xl font-bold shadow-sm transition hover:bg-surface-2 active:scale-95';
 
 interface Props {
   showOperators: boolean;

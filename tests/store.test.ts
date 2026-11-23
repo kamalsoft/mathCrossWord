@@ -79,7 +79,9 @@ describe('onboarding and profiles', () => {
     expect(useAppStore.getState().profiles['bob'].tier).toBe('elementary');
     useAppStore.getState().switchUser();
 
-    s.onboard('ANN', 99);
+    expect(s.onboard('ANN', 99)).toMatch(/already exists at age 6/);
+    expect(useAppStore.getState().currentProfileKey).toBeNull();
+    expect(s.onboard('ANN', 6)).toBeNull();
     expect(useAppStore.getState().currentProfileKey).toBe('ann');
     expect(game().puzzle.id).toBe(annPuzzle);
     expect(JSON.parse(mem.get('math-crossword-v1')!).state.profiles.ann.name).toBe('Ann');
