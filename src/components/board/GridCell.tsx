@@ -39,7 +39,8 @@ function GridCellInner({ cell, value, notes, selected, tinted, match, wrong, don
           : cell.given
             ? 'bg-given'
             : 'bg-surface';
-  const text = wrong ? 'text-wrong' : cell.given ? 'font-extrabold' : '';
+  // A wrong entry on the selected (accent) cell keeps the accent text colour and gets a red ring instead.
+  const text = wrong ? (selected ? 'ring-2 ring-inset ring-wrong' : 'text-wrong') : cell.given ? 'font-extrabold' : '';
   const kind = cell.type === 'operator' ? 'Operator cell' : 'Number cell';
   const label = `${kind}, row ${cell.row + 1}, column ${cell.col + 1}${value == null ? ', empty' : `, ${value}`}`;
   const anim = [wrong ? 'cell-wrong' : '', done ? 'cell-done' : ''].join(' ');
@@ -72,7 +73,9 @@ function GridCellInner({ cell, value, notes, selected, tinted, match, wrong, don
   return (
     <button
       type="button"
+      data-cell
       onClick={() => onSelect(cell.row, cell.col)}
+      onFocus={() => onSelect(cell.row, cell.col)}
       aria-label={label}
       className={`cell-tile flex min-h-0 min-w-0 items-center justify-center rounded-md font-semibold tabular-nums focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-accent ${SIZE_TEXT} ${bg} ${text} ${anim}`}
       {...dropProps}

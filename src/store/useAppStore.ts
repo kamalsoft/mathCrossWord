@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { generatePuzzle } from '../engine/puzzleGenerator';
 import { hintCell, isSolved } from '../engine/evaluator';
-import { TIERS, tierForAge } from '../engine/tierConfig';
+import { TIERS, TIER_ORDER, tierForAge } from '../engine/tierConfig';
 import type { Entries, Operator, Puzzle, PuzzleCell, TierId } from '../engine/types';
-import { playError, playTap, playWin, setSoundEnabled } from '../utils/sound';
+import { setSoundEnabled } from '../utils/sound';
 
 export type Theme = 'system' | 'light' | 'dark';
 export type MistakeMode = 'gameover' | 'warning' | 'streak';
@@ -191,7 +191,6 @@ function advance(p: ProfileData, g: GameState, s: Settings, change: Partial<Game
   let stats = p.stats;
 
   if (mistake) {
-    playError();
     game = { ...game, mistakes: game.mistakes + 1 };
     if (s.mistakeLimit && game.mistakes >= MISTAKE_LIMIT) {
       if (s.mistakeMode === 'warning') {
@@ -220,10 +219,93 @@ function advance(p: ProfileData, g: GameState, s: Settings, change: Partial<Game
       bestTimesMs: { ...stats.bestTimesMs, [tier]: best === undefined ? elapsedMs : Math.min(best, elapsedMs) },
     };
     game = { ...game, status: 'won', elapsedMs, score: game.score + Math.max(0, 300 - Math.floor(elapsedMs / 1000)) };
-    playWin();
   }
   return { game, stats };
 }
+
+const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+
+/** Rejects a saved game that the board code cannot render; such a game is dropped, not repaired. */
+function sanitizeGame(raw: unknown): GameState | null {
+  if (!isObj(raw) || !isObj(raw.puzzle)) return null;
+  const pz = raw.puzzle;
+  const size = pz.size;
+  if (!isNum(size) || !Array.isArray(pz.grid) || pz.grid.length !== size || !Array.isArray(pz.equations)) return null;
+  if (!TIER_ORDER.includes(pz.tier as TierId)) return null;
+  if (!Array.isArray(raw.entries) || !Array.isArray(raw.history) || !isObj(raw.notes)) return null;
+  if (!['playing', 'won', 'lost'].includes(raw.status as string)) return null;
+  if (![raw.mistakes, raw.hintsUsed, raw.score, raw.startedAt, raw.elapsedMs].every(isNum)) return null;
+  return raw as unknown as GameState;
+}
+
+/** Keeps a saved profile only when its required fields have the right types; stats are reset if malformed. */
+function sanitizeProfile(raw: unknown): ProfileData | null {
+  if (!isObj(raw) || typeof raw.name !== 'string' || !isNum(raw.age)) return null;
+  if (!TIER_ORDER.includes(raw.tier as TierId)) return null;
+  const st = isObj(raw.stats) ? raw.stats : null;
+  const stats: Stats =
+    st && isNum(st.gamesPlayed) && isNum(st.wins) && isNum(st.streak) && isObj(st.bestTimesMs)
+      ? (st as unknown as Stats)
+      : emptyStats();
+  return {
+    name: raw.name,
+    age: raw.age,
+    tier: raw.tier as TierId,
+    hasCompletedTour: raw.hasCompletedTour === true,
+    game: sanitizeGame(raw.game),
+    stats,
+  };
+}
+
+/** Keeps each setting whose saved value has the same type as its default. */
+function sanitizeSettings(raw: unknown): Settings {
+  const out: Record<string, unknown> = { ...defaultSettings };
+  if (!isObj(raw)) return out as unknown as Settings;
+  for (const key of Object.keys(defaultSettings) as (keyof Settings)[]) {
+    const v = raw[key];
+    const def = defaultSettings[key];
+    if (key === 'showNumberBankOverride') {
+      if (v === null || typeof v === 'boolean') out[key] = v;
+    } else if (typeof v === typeof def) {
+      out[key] = v;
+    }
+  }
+  const s = out as unknown as Settings;
+  if (!['system', 'light', 'dark'].includes(s.theme)) s.theme = defaultSettings.theme;
+  if (!['gameover', 'warning', 'streak'].includes(s.mistakeMode)) s.mistakeMode = defaultSettings.mistakeMode;
+  if (!['3', 'tier', 'unlimited'].includes(s.hintMode)) s.hintMode = defaultSettings.hintMode;
+  if (s.difficultyOverride !== 'auto' && !TIER_ORDER.includes(s.difficultyOverride)) s.difficultyOverride = 'auto';
+  return s;
+}
+
+/** Storage that never throws: falls back to memory when localStorage is missing, blocked or full. */
+const memory = new Map<string, string>();
+const safeStorage = {
+  getItem: (k: string): string | null => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return memory.get(k) ?? null;
+    }
+  },
+  setItem: (k: string, v: string): void => {
+    memory.set(k, v);
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      // Kept in memory for this session only.
+    }
+  },
+  removeItem: (k: string): void => {
+    memory.delete(k);
+    try {
+      localStorage.removeItem(k);
+    } catch {
+      // Nothing more to clear.
+    }
+  },
+};
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -243,9 +325,7 @@ export const useAppStore = create<AppState>()(
         updateProfile((p, st) => {
           const g = p.game;
           if (!g || g.status !== 'playing' || g.paused) return null;
-          const patch = fn(g, p, st);
-          if (patch) playTap();
-          return patch;
+          return fn(g, p, st);
         });
 
       return {
@@ -259,7 +339,9 @@ export const useAppStore = create<AppState>()(
           if (name.length < 2 || name.length > 20) return 'Name must be 2–20 characters.';
           if (!tier) return 'Age must be a whole number from 5 to 120.';
           const key = name.toLowerCase();
-          if (get().profiles[key]) {
+          const existing = get().profiles[key];
+          if (existing) {
+            if (existing.age !== age) return `A profile named ${existing.name} already exists at age ${existing.age}. Enter that age to resume.`;
             set({ currentProfileKey: key });
           } else {
             set(st => ({
@@ -298,7 +380,13 @@ export const useAppStore = create<AppState>()(
         newGame: tier =>
           updateProfile((p, st) => {
             const { difficultyOverride } = st.settings;
-            const puzzle = generatePuzzle(tier ?? (difficultyOverride === 'auto' ? p.tier : difficultyOverride));
+            let puzzle: Puzzle;
+            try {
+              puzzle = generatePuzzle(tier ?? (difficultyOverride === 'auto' ? p.tier : difficultyOverride));
+            } catch {
+              // Keeps any current game. A profile with no game shows a "Try a new puzzle" button.
+              return null;
+            }
             return {
               game: {
                 puzzle,
@@ -338,6 +426,7 @@ export const useAppStore = create<AppState>()(
             }
 
             const cur = g.entries[r][c];
+            if (cur !== null && cur === cell.answer) return null;
             const digits = typeof cur === 'number' ? String(cur) : '';
             if (digits.length >= TIERS[g.puzzle.tier].maxDigits) return null;
             const value = Number(digits + d);
@@ -450,20 +539,27 @@ export const useAppStore = create<AppState>()(
     {
       name: 'math-crossword-v1',
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeStorage),
       partialize: s => ({ profiles: s.profiles, currentProfileKey: s.currentProfileKey, settings: s.settings }),
+      // Version 1 is the first shape, so there is nothing to migrate yet. Bump the version and
+      // transform here when the saved shape changes.
+      migrate: persisted => persisted as AppState,
+      // Invalid saved data is dropped or reset field by field; it never reaches the UI unchecked.
       // Restored games start paused so time spent with the page closed is not counted.
       merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as Partial<AppState>;
-        const settings = { ...current.settings, ...saved.settings };
+        const saved = isObj(persisted) ? persisted : {};
+        const settings = sanitizeSettings(saved.settings);
         setSoundEnabled(settings.sound);
-        const profiles = Object.fromEntries(
-          Object.entries(saved.profiles ?? {}).map(([k, p]): [string, ProfileData] => [
-            k,
-            p.game?.status === 'playing' ? { ...p, game: { ...p.game, paused: true } } : p,
-          ]),
-        );
-        return { ...current, profiles, currentProfileKey: saved.currentProfileKey ?? null, settings };
+        const profiles: Record<string, ProfileData> = {};
+        if (isObj(saved.profiles)) {
+          for (const [k, raw] of Object.entries(saved.profiles)) {
+            const p = sanitizeProfile(raw);
+            if (!p) continue;
+            profiles[k] = p.game?.status === 'playing' ? { ...p, game: { ...p.game, paused: true } } : p;
+          }
+        }
+        const key = typeof saved.currentProfileKey === 'string' && profiles[saved.currentProfileKey] ? saved.currentProfileKey : null;
+        return { ...current, profiles, currentProfileKey: key, settings };
       },
     },
   ),

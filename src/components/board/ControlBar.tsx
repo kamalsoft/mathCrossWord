@@ -5,11 +5,7 @@ import { useGame } from '../storeTypes';
 const BTN =
   'flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-surface px-1 text-xs font-semibold shadow-sm transition enabled:hover:bg-surface-2 enabled:active:scale-95 disabled:opacity-40';
 
-interface Props {
-  onCheck: () => void;
-}
-
-export function ControlBar({ onCheck }: Props) {
+export function ControlBar() {
   const game = useGame();
   const settings = useAppStore((s) => s.settings);
   if (!game) return null;
@@ -42,7 +38,7 @@ export function ControlBar({ onCheck }: Props) {
         </button>
       </div>
       <div className="flex gap-2">
-        <button type="button" data-tour="validation" className={BTN} onClick={onCheck} disabled={locked}>
+        <button type="button" data-tour="validation" className={BTN} onClick={() => act().check()} disabled={locked}>
           <CircleCheck size={20} aria-hidden="true" />
           Check
         </button>
