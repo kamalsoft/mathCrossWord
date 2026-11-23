@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+/* Light palette (default). Dark overrides follow below. */
+:root {
+  --bg: #f3f5fa;
+  --surface: #ffffff;
+  --surface-2: #e6eaf3;
+  --fg: #1c2331;
+  --muted: #5a6478;
+  --line: #c3cad9;
+  --void: #1c2331;
+  --accent: #2f6bff;
+  --accent-fg: #ffffff;
+  --accent-soft: #d9e4ff;
+  --match: #ffe59a;
+  --given-bg: #e9edf5;
+  --op-bg: #f7f9fd;
+  --wrong: #d23c3c;
+  --star: #c98a00;
+  --ok: #1d7f57;
+  color-scheme: light;
+}
+
+/* Follow the system unless the player picked a theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1420;
+    --surface: #171e2e;
+    --surface-2: #1f2739;
+    --fg: #e8ecf5;
+    --muted: #9aa4b8;
+    --line: #2b3448;
+    --void: #05070c;
+    --accent: #6c93ff;
+    --accent-fg: #0b1020;
+    --accent-soft: #23325a;
+    --match: #4a3f14;
+    --given-bg: #1f2638;
+    --op-bg: #1b2234;
+    --wrong: #ff6b6b;
+    --star: #ffd45c;
+    --ok: #4fd1a0;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1420;
+  --surface: #171e2e;
+  --surface-2: #1f2739;
+  --fg: #e8ecf5;
+  --muted: #9aa4b8;
+  --line: #2b3448;
+  --void: #05070c;
+  --accent: #6c93ff;
+  --accent-fg: #0b1020;
+  --accent-soft: #23325a;
+  --match: #4a3f14;
+  --given-bg: #1f2638;
+  --op-bg: #1b2234;
+  --wrong: #ff6b6b;
+  --star: #ffd45c;
+  --ok: #4fd1a0;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-void: var(--void);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-match: var(--match);
+  --color-given: var(--given-bg);
+  --color-op: var(--op-bg);
+  --color-wrong: var(--wrong);
+  --color-star: var(--star);
+  --color-ok: var(--ok);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Kid-friendly UI scale: every rem-based size grows with the root font size. */
+html.large-font {
+  font-size: 118%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  overflow-x: hidden;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Cell feedback. Each class plays once when it is added to an element. */
+@keyframes cell-pop {
+  from { transform: scale(0.6); }
+  to { transform: scale(1); }
+}
+
+@keyframes cell-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+@keyframes cell-glow {
+  0% { box-shadow: 0 0 0 0 var(--star); }
+  40% { box-shadow: 0 0 0 5px var(--star); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes praise-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes star-pop {
+  from { transform: scale(0) rotate(-40deg); }
+  to { transform: scale(1) rotate(0); }
+}
+
+@keyframes confetti-fall {
+  from { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  to { transform: translate(var(--dx), 180px) rotate(var(--rot)); opacity: 0; }
+}
+
+.cell-tile {
+  transition: background-color 200ms ease, color 200ms ease, transform 150ms ease;
+}
+
+.cell-pop {
+  display: inline-block;
+  animation: cell-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.cell-wrong {
+  animation: cell-shake 300ms ease-in-out;
+}
+
+.cell-done {
+  animation: cell-glow 900ms ease-out;
+}
+
+.praise-in {
+  animation: praise-in 300ms ease-out;
+}
+
+.star-pop {
+  animation: star-pop 450ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.confetti {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 9rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -12px;
+  left: var(--x);
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--c);
+  animation: confetti-fall var(--dur, 2s) ease-in var(--delay, 0ms) both;
+}
+
+/* Reduced motion: no animation or transition anywhere; confetti is dropped. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .confetti {
+    display: none;
+  }
+}
